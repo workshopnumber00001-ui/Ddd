@@ -1,15 +1,6 @@
 import sys
 import os
-
-# पक्का करें कि प्रोजेक्ट रूट पाथ में हो
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# डायग्नोस्टिक: फोल्डर की लिस्ट दिखाएँ
-print("📂 Current directory contents:", os.listdir('.'))
-if os.path.isdir('modules'):
-    print("✅ 'modules' folder exists, contents:", os.listdir('modules'))
-else:
-    print("❌ 'modules' folder NOT found!")
 
 import pyromod.listen
 from config import Config
@@ -21,7 +12,6 @@ from logger import LOGGER
 from modules.retasks import recover_incomplete_batches
 from modules.scheduler import start_daily_schedulers
 
-# Flask Web Server
 app = Flask(__name__)
 
 @app.route("/")
