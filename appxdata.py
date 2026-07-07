@@ -10,19 +10,21 @@ from master import utils
 scraper = HttpxClient(verify_ssl=False)
 semaphore = asyncio.Semaphore(36)
 
-headers = {
-    'User-Agent': 'okhttp/4.9.1',
-    'Accept-Encoding': 'gzip',
-    'client-service': 'Appx',
-    'auth-key': 'appxapi',
-    'source': 'website',
-    'user-id': '',
-    'authorization': '',
-    'user_app_category': '',
-    'language': 'en',
-    'device_type': 'ANDROID'
-}
-
+# Default headers – will be updated with userid and token per call
+def get_headers(token=None, userid=None):
+    headers = {
+        'User-Agent': 'okhttp/4.9.1',
+        'Accept-Encoding': 'gzip',
+        'client-service': 'Appx',
+        'auth-key': 'appxapi',
+        'source': 'website',
+        'user-id': str(userid) if userid else '',
+        'authorization': token if token else '',
+        'user_app_category': '',
+        'language': 'en',
+        'device_type': 'ANDROID'
+    }
+    return headers
 
 async def check_server():
     """Check if the Appx server is reachable."""
@@ -36,20 +38,19 @@ async def check_server():
         LOGGER.error(f"Server check error: {e}")
         return False
 
-
-async def collect_data(batch_id, api, token):
+async def collect_data(batch_id, api, token, userid=None):
     """Collect all data (videos, PDFs) from a batch."""
     try:
-        all_urls = await fetch_appx_v1(api, batch_id)
+        headers = get_headers(token, userid)
+        all_urls = await fetch_appx_v1(api, batch_id, headers)
         if not all_urls:
-            all_urls = await fetch_appx_v2(api, batch_id)
+            all_urls = await fetch_appx_v2(api, batch_id, headers)
         return all_urls
     except Exception as e:
         LOGGER.error(f"Error collecting data: {e}")
         return []
 
-
-async def fetch_appx_v1(api, batch_id):
+async def fetch_appx_v1(api, batch_id, headers):
     """Fetch data using Appx API v1 (subject/topic hierarchy)."""
     try:
         tasks = []
@@ -86,7 +87,7 @@ async def fetch_appx_v1(api, batch_id):
                 TopicName = Topic.get("topic_name", Topic.get("name", "Unknown Topic"))
 
                 # Get content details for each topic
-                ids_details = await fetch_details(semaphore, api, v, TopicName, SubjectName)
+                ids_details = await fetch_details(semaphore, api, v, TopicName, SubjectName, headers)
                 all_urls.extend(ids_details)
 
         return all_urls
@@ -94,8 +95,7 @@ async def fetch_appx_v1(api, batch_id):
         LOGGER.error(f"Error in fetch_appx_v1: {e}")
         return []
 
-
-async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None):
+async def fetch_appx_v2(api, Batch_id, headers, u=-1, TopicName=None, SubjectName=None):
     """Fetch data using Appx API v2 (folder-based structure)."""
     try:
         all_urls = []
@@ -121,12 +121,12 @@ async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None):
 
             if folder_wise_course == "FOLDER":
                 # Recursively fetch folder contents
-                sub_items = await fetch_appx_v2(api, Batch_id, r,
+                sub_items = await fetch_appx_v2(api, Batch_id, headers, r,
                     item.get("topic_name", TopicName),
                     item.get("subject_name", SubjectName))
                 all_urls.extend(sub_items)
             elif folder_wise_course == "VIDEO":
-                url = await get_video_url(api, item)
+                url = await get_video_url(api, item, headers)
                 if url:
                     all_urls.append({
                         "url": url,
@@ -155,8 +155,7 @@ async def fetch_appx_v2(api, Batch_id, u=-1, TopicName=None, SubjectName=None):
         LOGGER.error(f"Error in fetch_appx_v2: {e}")
         return []
 
-
-async def fetch_details(semaphore, api, i, topicName=None, subjectName=None):
+async def fetch_details(semaphore, api, i, topicName=None, subjectName=None, headers=None):
     """Fetch content details for a specific topic."""
     async with semaphore:
         try:
@@ -178,7 +177,7 @@ async def fetch_details(semaphore, api, i, topicName=None, subjectName=None):
                 name = j.get("topic_name", j.get("name", j.get("title", "")))
 
                 if MTYPE in ["video", "Video", "VIDEO"]:
-                    video_url = await get_video_url(api, j)
+                    video_url = await get_video_url(api, j, headers)
                     if video_url:
                         all_data.append({
                             "url": video_url,
@@ -225,8 +224,7 @@ async def fetch_details(semaphore, api, i, topicName=None, subjectName=None):
             LOGGER.error(f"Error in fetch_details: {e}")
             return []
 
-
-async def get_video_url(api, i):
+async def get_video_url(api, i, headers):
     """Get the actual video URL from content item or ID."""
     try:
         # i can be a dict (item) or a string (id)
