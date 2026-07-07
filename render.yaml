@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: txt bot
+    name: bot
     plan: free
     env: docker
     dockerfilePath: Dockerfile
@@ -18,7 +18,3 @@ services:
         sync: false
       - key: CREDIT
         sync: false
-      #- key: WEBHOOK
-        #sync: false
-      - key: PORT
-        value: 5000  # Default port value, update if needed
