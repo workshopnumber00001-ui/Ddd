@@ -13,7 +13,7 @@ from config import Config
 from master.database import db_instance
 from master.server import HttpxClient
 from constant import msg
-from modules import appxdata
+from modules import appxdata, apnaex_extractor
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -130,12 +130,6 @@ async def set_chat(bot, GROUP_ID, editable1):
         return False
 
 
-from modules import appxdata, apnaex_extractor
-
-# ... (rest of imports are same)
-
-# ... (check_server, get_user_id, password_login, otp_login, timezone, set_chat functions remain same)
-
 async def collect_data(batch_id, api, token, userid):
     """Collect all content data from a batch using NEW ApnaEx logic."""
     try:
@@ -147,10 +141,10 @@ async def collect_data(batch_id, api, token, userid):
         # 1. Try new ApnaEx extraction logic
         all_urls = await apnaex_extractor.extract_batch_apnaex_logic(batch_id, api, clean_token, userid)
         
-        # 2. Fallback to old logic if new logic returns nothing (optional, can be removed if confident)
+        # 2. Fallback to old logic if new logic returns nothing
         if not all_urls:
             LOGGER.warning("ApnaEx logic returned no data. Falling back to legacy appxdata...")
-            all_urls = await appxdata.collect_data(batch_id, api, token)
+            all_urls = await appxdata.collect_data(batch_id, api, clean_token, userid)
             
         return all_urls
     except Exception as e:
@@ -213,7 +207,6 @@ async def add_batch(bot, m, api, app_name):
                 'user-id': str(userid) if userid else '',
                 'authorization': token.replace("Bearer ", "") if token else '',
                 'language': 'en',
-                # 'device_type': 'ANDROID' # Removed to match successful debug script
             }
             
             bdetail = None # Initialize bdetail
@@ -363,6 +356,7 @@ async def add_batch(bot, m, api, app_name):
         
         await editable1.edit_text(msg.COLLECTING_DATA)
         
+        # Pass the actual userid to collect_data
         all_data = await collect_data(bid, api, token, userid)
         
         if not all_data:
